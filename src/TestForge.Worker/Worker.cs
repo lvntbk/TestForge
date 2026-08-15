@@ -1,3 +1,4 @@
+using TestForge.Application.Analysis;
 using TestForge.Application.Git;
 using TestForge.Application.Repositories;
 
@@ -7,15 +8,18 @@ public sealed class Worker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IGitRepositoryCloner _cloner;
+    private readonly IProjectAnalyzer _analyzer;
     private readonly ILogger<Worker> _logger;
 
     public Worker(
         IServiceScopeFactory scopeFactory,
         IGitRepositoryCloner cloner,
+        IProjectAnalyzer analyzer,
         ILogger<Worker> logger)
     {
         _scopeFactory = scopeFactory;
         _cloner = cloner;
+        _analyzer = analyzer;
         _logger = logger;
     }
 
@@ -29,10 +33,7 @@ public sealed class Worker : BackgroundService
             try
             {
                 await ProcessNextTestRunAsync(stoppingToken);
-
-                await Task.Delay(
-                    TimeSpan.FromSeconds(5),
-                    stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
             catch (OperationCanceledException)
                 when (stoppingToken.IsCancellationRequested)
@@ -41,17 +42,10 @@ public sealed class Worker : BackgroundService
             }
             catch (Exception exception)
             {
-                _logger.LogError(
-                    exception,
-                    "Worker processing error.");
-
-                await Task.Delay(
-                    TimeSpan.FromSeconds(5),
-                    stoppingToken);
+                _logger.LogError(exception, "Worker processing error.");
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
-
-        _logger.LogInformation("TestForge worker stopped.");
     }
 
     private async Task ProcessNextTestRunAsync(
@@ -77,32 +71,50 @@ public sealed class Worker : BackgroundService
             "Cloning repository for test run {TestRunId}.",
             testRun.Id);
 
-        var result = await _cloner.CloneAsync(
+        var cloneResult = await _cloner.CloneAsync(
             testRun.Id,
             testRun.RepositoryUrl,
             cancellationToken);
 
-        if (!result.IsSuccessful)
+        if (!cloneResult.IsSuccessful)
         {
             testRun.MarkAsFailed(
-                result.StandardError,
+                cloneResult.StandardError,
                 DateTimeOffset.UtcNow);
 
             await repository.SaveChangesAsync(cancellationToken);
-
-            _logger.LogError(
-                "Clone failed for {TestRunId}: {Error}",
-                testRun.Id,
-                result.StandardError);
-
             return;
         }
 
         testRun.MarkAsAnalyzing();
         await repository.SaveChangesAsync(cancellationToken);
 
+        var analysis = await _analyzer.AnalyzeAsync(
+            cloneResult.WorkspacePath,
+            cancellationToken);
+
         _logger.LogInformation(
-            "Repository cloned to {WorkspacePath}.",
-            result.WorkspacePath);
+            "Analysis completed. Solutions: {SolutionCount}, Projects: {ProjectCount}, Web: {WebCount}, Tests: {TestCount}",
+            analysis.SolutionPaths.Count,
+            analysis.ProjectPaths.Count,
+            analysis.WebProjectPaths.Count,
+            analysis.TestProjectPaths.Count);
+
+        if (!analysis.IsSupported)
+        {
+            testRun.MarkAsFailed(
+                "Desteklenen ASP.NET Core Web API projesi bulunamadı.",
+                DateTimeOffset.UtcNow);
+
+            await repository.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        testRun.MarkAsBuilding();
+        await repository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Test run {TestRunId} moved to Building.",
+            testRun.Id);
     }
 }

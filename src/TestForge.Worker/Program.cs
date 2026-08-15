@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using TestForge.Application.Analysis;
 using TestForge.Application.Git;
 using TestForge.Application.Repositories;
+using TestForge.Infrastructure.Analysis;
 using TestForge.Infrastructure.Git;
 using TestForge.Infrastructure.Persistence;
 using TestForge.Infrastructure.Repositories;
@@ -24,8 +26,11 @@ builder.Services.AddSingleton<
     IGitRepositoryCloner,
     GitRepositoryCloner>();
 
+builder.Services.AddSingleton<
+    IProjectAnalyzer,
+    DotNetProjectAnalyzer>();
+
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
-
 host.Run();

@@ -57,6 +57,17 @@ public sealed class TestRun
         Status = TestRunStatus.Analyzing;
     }
 
+    public void MarkAsBuilding()
+    {
+        if (Status != TestRunStatus.Analyzing)
+        {
+            throw new InvalidOperationException(
+                $"Test run cannot start building from status {Status}.");
+        }
+
+        Status = TestRunStatus.Building;
+    }
+
     public void MarkAsFailed(
         string errorMessage,
         DateTimeOffset completedAtUtc)
