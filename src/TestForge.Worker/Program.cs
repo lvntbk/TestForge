@@ -3,11 +3,13 @@ using TestForge.Application.Analysis;
 using TestForge.Application.Build;
 using TestForge.Application.Git;
 using TestForge.Application.Repositories;
+using TestForge.Application.Testing;
 using TestForge.Infrastructure.Analysis;
 using TestForge.Infrastructure.Build;
 using TestForge.Infrastructure.Git;
 using TestForge.Infrastructure.Persistence;
 using TestForge.Infrastructure.Repositories;
+using TestForge.Infrastructure.Testing;
 using TestForge.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -35,6 +37,10 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<
     IDotNetBuildRunner,
     DockerDotNetBuildRunner>();
+
+builder.Services.AddSingleton<
+    IDotNetTestRunner,
+    DockerDotNetTestRunner>();
 
 builder.Services.AddHostedService<Worker>();
 

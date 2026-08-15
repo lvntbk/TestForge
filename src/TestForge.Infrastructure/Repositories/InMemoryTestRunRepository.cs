@@ -55,6 +55,17 @@ public sealed class InMemoryTestRunRepository : ITestRunRepository
         return Task.FromResult(testRun);
     }
 
+    public Task<TestRun?> GetNextTestingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var testRun = _testRuns.Values
+            .Where(item => item.Status == TestRunStatus.Testing)
+            .OrderBy(item => item.CreatedAtUtc)
+            .FirstOrDefault();
+
+        return Task.FromResult(testRun);
+    }
+
     public Task SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {

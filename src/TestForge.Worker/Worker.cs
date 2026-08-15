@@ -2,6 +2,7 @@ using TestForge.Application.Analysis;
 using TestForge.Application.Build;
 using TestForge.Application.Git;
 using TestForge.Application.Repositories;
+using TestForge.Application.Testing;
 using TestRunEntity = TestForge.Domain.Entities.TestRun;
 
 namespace TestForge.Worker;
@@ -12,6 +13,7 @@ public sealed class Worker : BackgroundService
     private readonly IGitRepositoryCloner _cloner;
     private readonly IProjectAnalyzer _analyzer;
     private readonly IDotNetBuildRunner _buildRunner;
+    private readonly IDotNetTestRunner _testRunner;
     private readonly ILogger<Worker> _logger;
 
     public Worker(
@@ -19,12 +21,14 @@ public sealed class Worker : BackgroundService
         IGitRepositoryCloner cloner,
         IProjectAnalyzer analyzer,
         IDotNetBuildRunner buildRunner,
+        IDotNetTestRunner testRunner,
         ILogger<Worker> logger)
     {
         _scopeFactory = scopeFactory;
         _cloner = cloner;
         _analyzer = analyzer;
         _buildRunner = buildRunner;
+        _testRunner = testRunner;
         _logger = logger;
     }
 
@@ -61,6 +65,19 @@ public sealed class Worker : BackgroundService
         var repository = scope.ServiceProvider
             .GetRequiredService<ITestRunRepository>();
 
+        var testingTestRun =
+            await repository.GetNextTestingAsync(cancellationToken);
+
+        if (testingTestRun is not null)
+        {
+            await RunTestsAsync(
+                testingTestRun,
+                repository,
+                cancellationToken);
+
+            return;
+        }
+
         var buildingTestRun =
             await repository.GetNextBuildingAsync(cancellationToken);
 
@@ -77,15 +94,13 @@ public sealed class Worker : BackgroundService
         var queuedTestRun =
             await repository.GetNextQueuedAsync(cancellationToken);
 
-        if (queuedTestRun is null)
+        if (queuedTestRun is not null)
         {
-            return;
+            await CloneAndAnalyzeAsync(
+                queuedTestRun,
+                repository,
+                cancellationToken);
         }
-
-        await CloneAndAnalyzeAsync(
-            queuedTestRun,
-            repository,
-            cancellationToken);
     }
 
     private async Task CloneAndAnalyzeAsync(
@@ -103,11 +118,12 @@ public sealed class Worker : BackgroundService
 
         if (!cloneResult.IsSuccessful)
         {
-            testRun.MarkAsFailed(
+            await FailAsync(
+                testRun,
+                repository,
                 cloneResult.StandardError,
-                DateTimeOffset.UtcNow);
+                cancellationToken);
 
-            await repository.SaveChangesAsync(cancellationToken);
             return;
         }
 
@@ -118,20 +134,14 @@ public sealed class Worker : BackgroundService
             cloneResult.WorkspacePath,
             cancellationToken);
 
-        _logger.LogInformation(
-            "Analysis: Solutions={Solutions}, Projects={Projects}, Web={Web}, Tests={Tests}",
-            analysis.SolutionPaths.Count,
-            analysis.ProjectPaths.Count,
-            analysis.WebProjectPaths.Count,
-            analysis.TestProjectPaths.Count);
-
         if (!analysis.IsSupported)
         {
-            testRun.MarkAsFailed(
+            await FailAsync(
+                testRun,
+                repository,
                 "Desteklenen ASP.NET Core Web API projesi bulunamadı.",
-                DateTimeOffset.UtcNow);
+                cancellationToken);
 
-            await repository.SaveChangesAsync(cancellationToken);
             return;
         }
 
@@ -144,18 +154,13 @@ public sealed class Worker : BackgroundService
         ITestRunRepository repository,
         CancellationToken cancellationToken)
     {
-        var workspacePath = Path.Combine(
-            Path.GetTempPath(),
-            "testforge",
-            "workspaces",
-            testRun.Id.ToString("N"));
+        var workspacePath = GetWorkspacePath(testRun.Id);
 
         var analysis = await _analyzer.AnalyzeAsync(
             workspacePath,
             cancellationToken);
 
-        var targetPath =
-            analysis.WebProjectPaths.First();
+        var targetPath = analysis.WebProjectPaths.First();
 
         _logger.LogInformation(
             "Building {TargetPath} in Docker for {TestRunId}.",
@@ -170,25 +175,13 @@ public sealed class Worker : BackgroundService
 
         if (!result.IsSuccessful)
         {
-            var diagnostics = string.Join(
-                Environment.NewLine,
-                result.StandardError,
-                result.StandardOutput);
-
-            if (diagnostics.Length > 4000)
-            {
-                diagnostics = diagnostics[^4000..];
-            }
-
-            testRun.MarkAsFailed(
-                diagnostics,
-                DateTimeOffset.UtcNow);
-
-            await repository.SaveChangesAsync(cancellationToken);
-
-            _logger.LogError(
-                "Docker build failed with exit code {ExitCode}.",
-                result.ExitCode);
+            await FailAsync(
+                testRun,
+                repository,
+                CombineDiagnostics(
+                    result.StandardError,
+                    result.StandardOutput),
+                cancellationToken);
 
             return;
         }
@@ -199,5 +192,131 @@ public sealed class Worker : BackgroundService
         _logger.LogInformation(
             "Docker build succeeded for {TestRunId}.",
             testRun.Id);
+    }
+
+    private async Task RunTestsAsync(
+        TestRunEntity testRun,
+        ITestRunRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var workspacePath = GetWorkspacePath(testRun.Id);
+
+        var analysis = await _analyzer.AnalyzeAsync(
+            workspacePath,
+            cancellationToken);
+
+        var webProjectPath = analysis.WebProjectPaths.First();
+
+        var relevantTestProjects =
+            await FindRelevantTestProjectsAsync(
+                workspacePath,
+                webProjectPath,
+                analysis.TestProjectPaths,
+                cancellationToken);
+
+        if (relevantTestProjects.Count == 0)
+        {
+            _logger.LogWarning(
+                "No relevant test projects found for {TestRunId}.",
+                testRun.Id);
+
+            testRun.MarkAsCompleted(DateTimeOffset.UtcNow);
+            await repository.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        foreach (var testProjectPath in relevantTestProjects)
+        {
+            _logger.LogInformation(
+                "Running {TestProjectPath} in Docker.",
+                testProjectPath);
+
+            var result = await _testRunner.RunAsync(
+                testRun.Id,
+                workspacePath,
+                testProjectPath,
+                cancellationToken);
+
+            if (!result.IsSuccessful)
+            {
+                await FailAsync(
+                    testRun,
+                    repository,
+                    CombineDiagnostics(
+                        result.StandardError,
+                        result.StandardOutput),
+                    cancellationToken);
+
+                return;
+            }
+
+            _logger.LogInformation(
+                "Tests passed: {TestProjectPath}.",
+                testProjectPath);
+        }
+
+        testRun.MarkAsCompleted(DateTimeOffset.UtcNow);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Test run {TestRunId} completed successfully.",
+            testRun.Id);
+    }
+
+    private static Task<List<string>>
+        FindRelevantTestProjectsAsync(
+            string workspacePath,
+            string webProjectPath,
+            IReadOnlyList<string> testProjectPaths,
+            CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var webProjectName =
+            Path.GetFileNameWithoutExtension(webProjectPath);
+
+        var relevantProjects = testProjectPaths
+            .Where(testProjectPath =>
+                Path.GetFileNameWithoutExtension(testProjectPath)
+                    .Contains(
+                        webProjectName,
+                        StringComparison.OrdinalIgnoreCase))
+            .OrderBy(testProjectPath => testProjectPath)
+            .ToList();
+
+        return Task.FromResult(relevantProjects);
+    }
+
+    private static async Task FailAsync(
+        TestRunEntity testRun,
+        ITestRunRepository repository,
+        string error,
+        CancellationToken cancellationToken)
+    {
+        testRun.MarkAsFailed(error, DateTimeOffset.UtcNow);
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    private static string GetWorkspacePath(Guid testRunId)
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            "testforge",
+            "workspaces",
+            testRunId.ToString("N"));
+    }
+
+    private static string CombineDiagnostics(
+        string standardError,
+        string standardOutput)
+    {
+        var diagnostics = string.Join(
+            Environment.NewLine,
+            standardError,
+            standardOutput);
+
+        return diagnostics.Length > 4000
+            ? diagnostics[^4000..]
+            : diagnostics;
     }
 }

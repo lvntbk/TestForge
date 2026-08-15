@@ -1,47 +1,48 @@
 using System.Diagnostics;
-using TestForge.Application.Build;
+using TestForge.Application.Testing;
 
-namespace TestForge.Infrastructure.Build;
+namespace TestForge.Infrastructure.Testing;
 
-public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
+public sealed class DockerDotNetTestRunner : IDotNetTestRunner
 {
-    private static readonly TimeSpan BuildTimeout =
+    private static readonly TimeSpan TestTimeout =
         TimeSpan.FromMinutes(5);
 
-    public async Task<BuildExecutionResult> BuildAsync(
+    public async Task<TestExecutionResult> RunAsync(
         Guid testRunId,
         string workspacePath,
-        string targetPath,
+        string testProjectPath,
         CancellationToken cancellationToken = default)
     {
         var fullWorkspacePath = Path.GetFullPath(workspacePath);
-        var fullTargetPath = Path.GetFullPath(
-            Path.Combine(workspacePath, targetPath));
 
-        if (!fullTargetPath.StartsWith(
+        var fullTestProjectPath = Path.GetFullPath(
+            Path.Combine(workspacePath, testProjectPath));
+
+        if (!fullTestProjectPath.StartsWith(
                 fullWorkspacePath + Path.DirectorySeparatorChar,
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "Build target workspace dışında olamaz.");
+                "Test projesi workspace dışında olamaz.");
         }
 
-        var relativeTarget = Path.GetRelativePath(
+        var relativeTestProjectPath = Path.GetRelativePath(
             fullWorkspacePath,
-            fullTargetPath);
+            fullTestProjectPath);
 
         using var timeoutSource =
             CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
 
-        timeoutSource.CancelAfter(BuildTimeout);
+        timeoutSource.CancelAfter(TestTimeout);
 
         using var process = new Process
         {
             StartInfo = CreateStartInfo(
                 testRunId,
                 fullWorkspacePath,
-                relativeTarget)
+                relativeTestProjectPath)
         };
 
         try
@@ -56,9 +57,10 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
             var output = await outputTask;
             var error = await errorTask;
 
-            return new BuildExecutionResult(
+            return new TestExecutionResult(
                 process.ExitCode == 0,
                 process.ExitCode,
+                relativeTestProjectPath,
                 output,
                 error);
         }
@@ -67,19 +69,21 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
         {
             TryKill(process);
 
-            return new BuildExecutionResult(
+            return new TestExecutionResult(
                 false,
                 -1,
+                relativeTestProjectPath,
                 string.Empty,
-                "Docker build operation timed out.");
+                "Docker test operation timed out.");
         }
         catch (Exception exception)
         {
             TryKill(process);
 
-            return new BuildExecutionResult(
+            return new TestExecutionResult(
                 false,
                 -1,
+                relativeTestProjectPath,
                 string.Empty,
                 exception.Message);
         }
@@ -88,7 +92,7 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
     private static ProcessStartInfo CreateStartInfo(
         Guid testRunId,
         string workspacePath,
-        string targetPath)
+        string testProjectPath)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -100,7 +104,7 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
         };
 
         var containerName =
-            $"testforge-build-{testRunId:N}";
+            $"testforge-test-{testRunId:N}";
 
         string[] arguments =
         [
@@ -124,15 +128,19 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
             "DOTNET_CLI_HOME=/workspace/.testforge/dotnet",
             "-e",
             "NUGET_PACKAGES=/workspace/.testforge/nuget",
+            "-e",
+            "NUGET_HTTP_CACHE_PATH=/workspace/.testforge/http-cache",
             "-v",
             $"{workspacePath}:/workspace",
             "-w",
             "/workspace",
             "mcr.microsoft.com/dotnet/sdk:8.0",
             "dotnet",
-            "build",
-            targetPath,
-            "--nologo"
+            "test",
+            testProjectPath,
+            "--nologo",
+            "--logger",
+            "console;verbosity=normal"
         ];
 
         foreach (var argument in arguments)

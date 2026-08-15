@@ -79,6 +79,20 @@ public sealed class TestRun
         Status = TestRunStatus.Testing;
     }
 
+    public void MarkAsCompleted(
+        DateTimeOffset completedAtUtc)
+    {
+        if (Status != TestRunStatus.Testing)
+        {
+            throw new InvalidOperationException(
+                $"Test run cannot complete from status {Status}.");
+        }
+
+        Status = TestRunStatus.Completed;
+        CompletedAtUtc = completedAtUtc;
+        ErrorMessage = null;
+    }
+
     public void MarkAsFailed(
         string errorMessage,
         DateTimeOffset completedAtUtc)
