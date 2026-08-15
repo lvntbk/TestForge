@@ -38,7 +38,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-if (!app.Environment.IsEnvironment("Testing"))
+if (app.Environment.IsProduction())
 {
     app.UseHttpsRedirection();
 }
