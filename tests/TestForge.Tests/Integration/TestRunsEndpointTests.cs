@@ -1,17 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using TestForge.Api.Contracts.TestRuns;
 
 namespace TestForge.Tests.Integration;
 
 public sealed class TestRunsEndpointTests :
-    IClassFixture<WebApplicationFactory<Program>>
+    IClassFixture<TestForgeApiFactory>
 {
     private readonly HttpClient _client;
 
     public TestRunsEndpointTests(
-        WebApplicationFactory<Program> factory)
+        TestForgeApiFactory factory)
     {
         _client = factory.CreateClient();
     }
