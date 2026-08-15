@@ -7,7 +7,18 @@ public sealed class TestRun
     private TestRun()
     {
     }
+    public void StartCloning(DateTimeOffset startedAtUtc)
+    {
+        if (Status != TestRunStatus.Queued)
+        {
+            throw new InvalidOperationException(
+                $"Test run cannot start cloning from status {Status}.");
+        }
 
+        Status = TestRunStatus.Cloning;
+        StartedAtUtc = startedAtUtc;
+        ErrorMessage = null;
+    }
     private TestRun(Guid id, string repositoryUrl, DateTimeOffset createdAtUtc)
     {
         Id = id;
