@@ -1,6 +1,8 @@
 using TestForge.Application.Analysis;
+using TestForge.Application.Build;
 using TestForge.Application.Git;
 using TestForge.Application.Repositories;
+using TestRunEntity = TestForge.Domain.Entities.TestRun;
 
 namespace TestForge.Worker;
 
@@ -9,17 +11,20 @@ public sealed class Worker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IGitRepositoryCloner _cloner;
     private readonly IProjectAnalyzer _analyzer;
+    private readonly IDotNetBuildRunner _buildRunner;
     private readonly ILogger<Worker> _logger;
 
     public Worker(
         IServiceScopeFactory scopeFactory,
         IGitRepositoryCloner cloner,
         IProjectAnalyzer analyzer,
+        IDotNetBuildRunner buildRunner,
         ILogger<Worker> logger)
     {
         _scopeFactory = scopeFactory;
         _cloner = cloner;
         _analyzer = analyzer;
+        _buildRunner = buildRunner;
         _logger = logger;
     }
 
@@ -56,20 +61,40 @@ public sealed class Worker : BackgroundService
         var repository = scope.ServiceProvider
             .GetRequiredService<ITestRunRepository>();
 
-        var testRun = await repository.GetNextQueuedAsync(
-            cancellationToken);
+        var buildingTestRun =
+            await repository.GetNextBuildingAsync(cancellationToken);
 
-        if (testRun is null)
+        if (buildingTestRun is not null)
+        {
+            await BuildAsync(
+                buildingTestRun,
+                repository,
+                cancellationToken);
+
+            return;
+        }
+
+        var queuedTestRun =
+            await repository.GetNextQueuedAsync(cancellationToken);
+
+        if (queuedTestRun is null)
         {
             return;
         }
 
+        await CloneAndAnalyzeAsync(
+            queuedTestRun,
+            repository,
+            cancellationToken);
+    }
+
+    private async Task CloneAndAnalyzeAsync(
+        TestRunEntity testRun,
+        ITestRunRepository repository,
+        CancellationToken cancellationToken)
+    {
         testRun.StartCloning(DateTimeOffset.UtcNow);
         await repository.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation(
-            "Cloning repository for test run {TestRunId}.",
-            testRun.Id);
 
         var cloneResult = await _cloner.CloneAsync(
             testRun.Id,
@@ -94,7 +119,7 @@ public sealed class Worker : BackgroundService
             cancellationToken);
 
         _logger.LogInformation(
-            "Analysis completed. Solutions: {SolutionCount}, Projects: {ProjectCount}, Web: {WebCount}, Tests: {TestCount}",
+            "Analysis: Solutions={Solutions}, Projects={Projects}, Web={Web}, Tests={Tests}",
             analysis.SolutionPaths.Count,
             analysis.ProjectPaths.Count,
             analysis.WebProjectPaths.Count,
@@ -112,9 +137,67 @@ public sealed class Worker : BackgroundService
 
         testRun.MarkAsBuilding();
         await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task BuildAsync(
+        TestRunEntity testRun,
+        ITestRunRepository repository,
+        CancellationToken cancellationToken)
+    {
+        var workspacePath = Path.Combine(
+            Path.GetTempPath(),
+            "testforge",
+            "workspaces",
+            testRun.Id.ToString("N"));
+
+        var analysis = await _analyzer.AnalyzeAsync(
+            workspacePath,
+            cancellationToken);
+
+        var targetPath =
+            analysis.WebProjectPaths.First();
 
         _logger.LogInformation(
-            "Test run {TestRunId} moved to Building.",
+            "Building {TargetPath} in Docker for {TestRunId}.",
+            targetPath,
+            testRun.Id);
+
+        var result = await _buildRunner.BuildAsync(
+            testRun.Id,
+            workspacePath,
+            targetPath,
+            cancellationToken);
+
+        if (!result.IsSuccessful)
+        {
+            var diagnostics = string.Join(
+                Environment.NewLine,
+                result.StandardError,
+                result.StandardOutput);
+
+            if (diagnostics.Length > 4000)
+            {
+                diagnostics = diagnostics[^4000..];
+            }
+
+            testRun.MarkAsFailed(
+                diagnostics,
+                DateTimeOffset.UtcNow);
+
+            await repository.SaveChangesAsync(cancellationToken);
+
+            _logger.LogError(
+                "Docker build failed with exit code {ExitCode}.",
+                result.ExitCode);
+
+            return;
+        }
+
+        testRun.MarkAsTesting();
+        await repository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Docker build succeeded for {TestRunId}.",
             testRun.Id);
     }
 }

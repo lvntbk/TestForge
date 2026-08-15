@@ -15,6 +15,9 @@ public interface ITestRunRepository
     Task<TestRun?> GetNextQueuedAsync(
         CancellationToken cancellationToken = default);
 
+    Task<TestRun?> GetNextBuildingAsync(
+        CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(
         CancellationToken cancellationToken = default);
 }

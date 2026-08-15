@@ -49,6 +49,16 @@ public sealed class PostgresTestRunRepository : ITestRunRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public Task<TestRun?> GetNextBuildingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.TestRuns
+            .Where(testRun =>
+                testRun.Status == TestRunStatus.Building)
+            .OrderBy(testRun => testRun.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {

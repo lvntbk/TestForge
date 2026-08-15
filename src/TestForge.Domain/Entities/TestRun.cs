@@ -68,6 +68,17 @@ public sealed class TestRun
         Status = TestRunStatus.Building;
     }
 
+    public void MarkAsTesting()
+    {
+        if (Status != TestRunStatus.Building)
+        {
+            throw new InvalidOperationException(
+                $"Test run cannot start testing from status {Status}.");
+        }
+
+        Status = TestRunStatus.Testing;
+    }
+
     public void MarkAsFailed(
         string errorMessage,
         DateTimeOffset completedAtUtc)

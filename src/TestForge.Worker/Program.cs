@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using TestForge.Application.Analysis;
+using TestForge.Application.Build;
 using TestForge.Application.Git;
 using TestForge.Application.Repositories;
 using TestForge.Infrastructure.Analysis;
+using TestForge.Infrastructure.Build;
 using TestForge.Infrastructure.Git;
 using TestForge.Infrastructure.Persistence;
 using TestForge.Infrastructure.Repositories;
@@ -29,6 +31,10 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<
     IProjectAnalyzer,
     DotNetProjectAnalyzer>();
+
+builder.Services.AddSingleton<
+    IDotNetBuildRunner,
+    DockerDotNetBuildRunner>();
 
 builder.Services.AddHostedService<Worker>();
 
