@@ -1,3 +1,4 @@
+using TestForge.Application.Git;
 using TestForge.Application.Repositories;
 
 namespace TestForge.Worker;
@@ -5,13 +6,16 @@ namespace TestForge.Worker;
 public sealed class Worker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IGitRepositoryCloner _cloner;
     private readonly ILogger<Worker> _logger;
 
     public Worker(
         IServiceScopeFactory scopeFactory,
+        IGitRepositoryCloner cloner,
         ILogger<Worker> logger)
     {
         _scopeFactory = scopeFactory;
+        _cloner = cloner;
         _logger = logger;
     }
 
@@ -39,7 +43,7 @@ public sealed class Worker : BackgroundService
             {
                 _logger.LogError(
                     exception,
-                    "An error occurred while processing a test run.");
+                    "Worker processing error.");
 
                 await Task.Delay(
                     TimeSpan.FromSeconds(5),
@@ -67,12 +71,38 @@ public sealed class Worker : BackgroundService
         }
 
         testRun.StartCloning(DateTimeOffset.UtcNow);
-
         await repository.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Test run {TestRunId} moved to Cloning. Repository: {RepositoryUrl}",
+            "Cloning repository for test run {TestRunId}.",
+            testRun.Id);
+
+        var result = await _cloner.CloneAsync(
             testRun.Id,
-            testRun.RepositoryUrl);
+            testRun.RepositoryUrl,
+            cancellationToken);
+
+        if (!result.IsSuccessful)
+        {
+            testRun.MarkAsFailed(
+                result.StandardError,
+                DateTimeOffset.UtcNow);
+
+            await repository.SaveChangesAsync(cancellationToken);
+
+            _logger.LogError(
+                "Clone failed for {TestRunId}: {Error}",
+                testRun.Id,
+                result.StandardError);
+
+            return;
+        }
+
+        testRun.MarkAsAnalyzing();
+        await repository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Repository cloned to {WorkspacePath}.",
+            result.WorkspacePath);
     }
 }

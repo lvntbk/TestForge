@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using TestForge.Application.Git;
 using TestForge.Application.Repositories;
+using TestForge.Infrastructure.Git;
 using TestForge.Infrastructure.Persistence;
 using TestForge.Infrastructure.Repositories;
 using TestForge.Worker;
@@ -17,6 +19,10 @@ builder.Services.AddDbContext<TestForgeDbContext>(
 builder.Services.AddScoped<
     ITestRunRepository,
     PostgresTestRunRepository>();
+
+builder.Services.AddSingleton<
+    IGitRepositoryCloner,
+    GitRepositoryCloner>();
 
 builder.Services.AddHostedService<Worker>();
 

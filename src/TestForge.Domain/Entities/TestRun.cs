@@ -7,19 +7,11 @@ public sealed class TestRun
     private TestRun()
     {
     }
-    public void StartCloning(DateTimeOffset startedAtUtc)
-    {
-        if (Status != TestRunStatus.Queued)
-        {
-            throw new InvalidOperationException(
-                $"Test run cannot start cloning from status {Status}.");
-        }
 
-        Status = TestRunStatus.Cloning;
-        StartedAtUtc = startedAtUtc;
-        ErrorMessage = null;
-    }
-    private TestRun(Guid id, string repositoryUrl, DateTimeOffset createdAtUtc)
+    private TestRun(
+        Guid id,
+        string repositoryUrl,
+        DateTimeOffset createdAtUtc)
     {
         Id = id;
         RepositoryUrl = repositoryUrl;
@@ -40,6 +32,48 @@ public sealed class TestRun
     public DateTimeOffset? CompletedAtUtc { get; private set; }
 
     public string? ErrorMessage { get; private set; }
+
+    public void StartCloning(DateTimeOffset startedAtUtc)
+    {
+        if (Status != TestRunStatus.Queued)
+        {
+            throw new InvalidOperationException(
+                $"Test run cannot start cloning from status {Status}.");
+        }
+
+        Status = TestRunStatus.Cloning;
+        StartedAtUtc = startedAtUtc;
+        ErrorMessage = null;
+    }
+
+    public void MarkAsAnalyzing()
+    {
+        if (Status != TestRunStatus.Cloning)
+        {
+            throw new InvalidOperationException(
+                $"Test run cannot start analysis from status {Status}.");
+        }
+
+        Status = TestRunStatus.Analyzing;
+    }
+
+    public void MarkAsFailed(
+        string errorMessage,
+        DateTimeOffset completedAtUtc)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            errorMessage = "Unknown processing error.";
+        }
+
+        Status = TestRunStatus.Failed;
+
+        ErrorMessage = errorMessage.Length > 4000
+            ? errorMessage[..4000]
+            : errorMessage;
+
+        CompletedAtUtc = completedAtUtc;
+    }
 
     public static TestRun Create(
         string repositoryUrl,
