@@ -24,6 +24,8 @@ The first end-to-end MVP pipeline is operational.
 - TRX test result generation and secure XML parsing
 - Passed, failed and skipped test count aggregation
 - JSON report endpoint (`GET /api/test-runs/{id}/report`)
+- React and TypeScript dashboard with pipeline polling
+- Backend and frontend GitHub Actions CI
 - Unit and integration tests
 
 ## Pipeline

@@ -1,0 +1,14 @@
+{
+  "testRunId": "00adf5af-9111-47ce-b82e-c3c471ba9083",
+  "buildProjectPath": "Evofit.API/Evofit.API.csproj",
+  "buildExitCode": 0,
+  "buildDurationMilliseconds": 30723,
+  "testProjectPaths": [
+    "Evofit.API.Tests/Evofit.API.Tests.csproj"
+  ],
+  "testExitCode": 0,
+  "testDurationMilliseconds": 46361,
+  "passedCount": 12,
+  "failedCount": 0,
+  "skippedCount": 0
+}
