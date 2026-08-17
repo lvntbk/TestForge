@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using TestForge.Api.Contracts.TestRuns;
+using TestForge.Application.Repositories;
 
 namespace TestForge.Tests.Integration;
 
@@ -8,10 +10,12 @@ public sealed class TestRunsEndpointTests :
     IClassFixture<TestForgeApiFactory>
 {
     private readonly HttpClient _client;
+    private readonly TestForgeApiFactory _factory;
 
     public TestRunsEndpointTests(
         TestForgeApiFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 
@@ -105,6 +109,50 @@ public sealed class TestRunsEndpointTests :
             $"/api/test-runs/{Guid.NewGuid()}");
 
         // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetReport_AfterReportIsRecorded_ReturnsReport()
+    {
+        var createResponse = await _client.PostAsJsonAsync(
+            "/api/test-runs",
+            new { RepositoryUrl = "https://github.com/kubeltd/distkeep" });
+
+        var testRun = await createResponse.Content
+            .ReadFromJsonAsync<TestRunResponse>();
+
+        Assert.NotNull(testRun);
+
+        var reports = _factory.Services
+            .GetRequiredService<ITestRunReportRepository>();
+        var report = await reports.GetOrCreateAsync(testRun.Id);
+        report.RecordBuild("src/Sample.Api.csproj", 0, 1250, "ok", "");
+        report.RecordTest("tests/Sample.Tests.csproj", 0, 800, "passed", "");
+        await reports.SaveChangesAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/test-runs/{testRun.Id}/report");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var result = await response.Content
+            .ReadFromJsonAsync<TestRunReportResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal(testRun.Id, result.TestRunId);
+        Assert.Equal(0, result.BuildExitCode);
+        Assert.Equal(1250, result.BuildDurationMilliseconds);
+        Assert.Single(result.TestProjectPaths);
+        Assert.Equal("tests/Sample.Tests.csproj", result.TestProjectPaths[0]);
+    }
+
+    [Fact]
+    public async Task GetReport_BeforeProcessing_ReturnsNotFound()
+    {
+        var response = await _client.GetAsync(
+            $"/api/test-runs/{Guid.NewGuid()}/report");
+
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

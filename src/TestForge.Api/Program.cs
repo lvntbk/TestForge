@@ -14,6 +14,9 @@ if (builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddSingleton<
         ITestRunRepository,
         InMemoryTestRunRepository>();
+    builder.Services.AddSingleton<
+        ITestRunReportRepository,
+        InMemoryTestRunReportRepository>();
 }
 else
 {
@@ -28,6 +31,9 @@ else
     builder.Services.AddScoped<
         ITestRunRepository,
         PostgresTestRunRepository>();
+    builder.Services.AddScoped<
+        ITestRunReportRepository,
+        PostgresTestRunReportRepository>();
 }
 
 var app = builder.Build();

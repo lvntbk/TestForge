@@ -45,6 +45,8 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
                 relativeTestProjectPath)
         };
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
             process.Start();
@@ -61,6 +63,7 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
                 process.ExitCode == 0,
                 process.ExitCode,
                 relativeTestProjectPath,
+                stopwatch.ElapsedMilliseconds,
                 output,
                 error);
         }
@@ -73,6 +76,7 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
                 false,
                 -1,
                 relativeTestProjectPath,
+                stopwatch.ElapsedMilliseconds,
                 string.Empty,
                 "Docker test operation timed out.");
         }
@@ -84,6 +88,7 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
                 false,
                 -1,
                 relativeTestProjectPath,
+                stopwatch.ElapsedMilliseconds,
                 string.Empty,
                 exception.Message);
         }

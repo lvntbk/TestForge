@@ -67,6 +67,39 @@ namespace TestForge.Infrastructure.Persistence.Migrations
 
                     b.ToTable("test_runs", (string)null);
                 });
+
+            modelBuilder.Entity("TestForge.Domain.Entities.TestRunReport", b =>
+                {
+                    b.Property<Guid>("TestRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("test_run_id");
+
+                    b.Property<int?>("BuildExitCode").HasColumnType("integer").HasColumnName("build_exit_code");
+                    b.Property<long?>("BuildDurationMilliseconds").HasColumnType("bigint").HasColumnName("build_duration_ms");
+                    b.Property<string>("BuildProjectPath").HasMaxLength(2048).HasColumnType("character varying(2048)").HasColumnName("build_project_path");
+                    b.Property<string>("BuildStandardError").HasColumnType("text").HasColumnName("build_standard_error");
+                    b.Property<string>("BuildStandardOutput").HasColumnType("text").HasColumnName("build_standard_output");
+                    b.Property<int?>("FailedCount").HasColumnType("integer").HasColumnName("failed_count");
+                    b.Property<int?>("PassedCount").HasColumnType("integer").HasColumnName("passed_count");
+                    b.Property<int?>("SkippedCount").HasColumnType("integer").HasColumnName("skipped_count");
+                    b.Property<long?>("TestDurationMilliseconds").HasColumnType("bigint").HasColumnName("test_duration_ms");
+                    b.Property<int?>("TestExitCode").HasColumnType("integer").HasColumnName("test_exit_code");
+                    b.Property<string>("TestProjectPaths").IsRequired().HasColumnType("text").HasColumnName("test_project_paths");
+                    b.Property<string>("TestStandardError").HasColumnType("text").HasColumnName("test_standard_error");
+                    b.Property<string>("TestStandardOutput").HasColumnType("text").HasColumnName("test_standard_output");
+
+                    b.HasKey("TestRunId");
+                    b.ToTable("test_run_reports", (string)null);
+                });
+
+            modelBuilder.Entity("TestForge.Domain.Entities.TestRunReport", b =>
+                {
+                    b.HasOne("TestForge.Domain.Entities.TestRun", null)
+                        .WithOne()
+                        .HasForeignKey("TestForge.Domain.Entities.TestRunReport", "TestRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

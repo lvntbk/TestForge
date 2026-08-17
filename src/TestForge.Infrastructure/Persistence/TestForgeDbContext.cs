@@ -12,6 +12,7 @@ public sealed class TestForgeDbContext : DbContext
     }
 
     public DbSet<TestRun> TestRuns => Set<TestRun>();
+    public DbSet<TestRunReport> TestRunReports => Set<TestRunReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

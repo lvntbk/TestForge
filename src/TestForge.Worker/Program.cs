@@ -25,6 +25,9 @@ builder.Services.AddDbContext<TestForgeDbContext>(
 builder.Services.AddScoped<
     ITestRunRepository,
     PostgresTestRunRepository>();
+builder.Services.AddScoped<
+    ITestRunReportRepository,
+    PostgresTestRunReportRepository>();
 
 builder.Services.AddSingleton<
     IGitRepositoryCloner,

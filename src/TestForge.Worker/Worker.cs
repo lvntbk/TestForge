@@ -64,6 +64,8 @@ public sealed class Worker : BackgroundService
 
         var repository = scope.ServiceProvider
             .GetRequiredService<ITestRunRepository>();
+        var reportRepository = scope.ServiceProvider
+            .GetRequiredService<ITestRunReportRepository>();
 
         var testingTestRun =
             await repository.GetNextTestingAsync(cancellationToken);
@@ -73,6 +75,7 @@ public sealed class Worker : BackgroundService
             await RunTestsAsync(
                 testingTestRun,
                 repository,
+                reportRepository,
                 cancellationToken);
 
             return;
@@ -86,6 +89,7 @@ public sealed class Worker : BackgroundService
             await BuildAsync(
                 buildingTestRun,
                 repository,
+                reportRepository,
                 cancellationToken);
 
             return;
@@ -152,6 +156,7 @@ public sealed class Worker : BackgroundService
     private async Task BuildAsync(
         TestRunEntity testRun,
         ITestRunRepository repository,
+        ITestRunReportRepository reportRepository,
         CancellationToken cancellationToken)
     {
         var workspacePath = GetWorkspacePath(testRun.Id);
@@ -172,6 +177,19 @@ public sealed class Worker : BackgroundService
             workspacePath,
             targetPath,
             cancellationToken);
+
+        var report = await reportRepository.GetOrCreateAsync(
+            testRun.Id,
+            cancellationToken);
+
+        report.RecordBuild(
+            targetPath,
+            result.ExitCode,
+            result.DurationMilliseconds,
+            result.StandardOutput,
+            result.StandardError);
+
+        await reportRepository.SaveChangesAsync(cancellationToken);
 
         if (!result.IsSuccessful)
         {
@@ -197,6 +215,7 @@ public sealed class Worker : BackgroundService
     private async Task RunTestsAsync(
         TestRunEntity testRun,
         ITestRunRepository repository,
+        ITestRunReportRepository reportRepository,
         CancellationToken cancellationToken)
     {
         var workspacePath = GetWorkspacePath(testRun.Id);
@@ -236,6 +255,19 @@ public sealed class Worker : BackgroundService
                 workspacePath,
                 testProjectPath,
                 cancellationToken);
+
+            var report = await reportRepository.GetOrCreateAsync(
+                testRun.Id,
+                cancellationToken);
+
+            report.RecordTest(
+                result.TestProjectPath,
+                result.ExitCode,
+                result.DurationMilliseconds,
+                result.StandardOutput,
+                result.StandardError);
+
+            await reportRepository.SaveChangesAsync(cancellationToken);
 
             if (!result.IsSuccessful)
             {

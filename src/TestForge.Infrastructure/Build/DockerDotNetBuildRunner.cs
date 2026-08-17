@@ -44,6 +44,8 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
                 relativeTarget)
         };
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
             process.Start();
@@ -59,6 +61,7 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
             return new BuildExecutionResult(
                 process.ExitCode == 0,
                 process.ExitCode,
+                stopwatch.ElapsedMilliseconds,
                 output,
                 error);
         }
@@ -70,6 +73,7 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
             return new BuildExecutionResult(
                 false,
                 -1,
+                stopwatch.ElapsedMilliseconds,
                 string.Empty,
                 "Docker build operation timed out.");
         }
@@ -80,6 +84,7 @@ public sealed class DockerDotNetBuildRunner : IDotNetBuildRunner
             return new BuildExecutionResult(
                 false,
                 -1,
+                stopwatch.ElapsedMilliseconds,
                 string.Empty,
                 exception.Message);
         }

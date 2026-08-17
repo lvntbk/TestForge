@@ -10,10 +10,14 @@ namespace TestForge.Api.Controllers;
 public sealed class TestRunsController : ControllerBase
 {
     private readonly ITestRunRepository _repository;
+    private readonly ITestRunReportRepository _reportRepository;
 
-    public TestRunsController(ITestRunRepository repository)
+    public TestRunsController(
+        ITestRunRepository repository,
+        ITestRunReportRepository reportRepository)
     {
         _repository = repository;
+        _reportRepository = reportRepository;
     }
 
     [HttpPost]
@@ -66,6 +70,26 @@ public sealed class TestRunsController : ControllerBase
         }
 
         return Ok(TestRunResponse.FromEntity(testRun));
+    }
+
+    [HttpGet("{id:guid}/report")]
+    [ProducesResponseType<TestRunReportResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReport(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var report = await _reportRepository.GetByTestRunIdAsync(
+            id,
+            cancellationToken);
+
+        if (report is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(TestRunReportResponse.FromEntity(report));
     }
 
     private static bool IsValidGitHubRepositoryUrl(string? repositoryUrl)

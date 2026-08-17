@@ -19,6 +19,9 @@ The first end-to-end MVP pipeline is operational.
 - Docker-isolated test execution
 - CPU, memory, PID, timeout and capability limits
 - Persistent state transitions
+- Persistent build and test reports
+- Build and test exit codes, durations, project paths and logs
+- JSON report endpoint (`GET /api/test-runs/{id}/report`)
 - Unit and integration tests
 
 ## Pipeline
@@ -33,26 +36,20 @@ Queued → Cloning → Analyzing → Building → Testing → Completed / Failed
 
 ## Current tests
 
-TestForge.Tests: 7 passed, 0 failed
+TestForge.Tests: 11 passed, 0 failed
 
 ## Next milestone
 
-Persist build and test reports:
+Complete structured test result reporting:
 
-- Build exit code
-- Test exit code
-- Passed, failed and skipped counts
-- Build and test durations
-- Executed project paths
-- Build and test logs
-- TestRunReport entity and migration
-- GET /api/test-runs/{id}/report endpoint
-- JSON report response
+- Generate TRX files during test execution
+- Parse passed, failed and skipped counts
+- Store individual test project results
+- Add report retention and log size policies
 
 ## Later roadmap
 
 - HTML report
-- TRX parsing
 - Workspace cleanup
 - Retry policy
 - Atomic job claiming for multiple workers
