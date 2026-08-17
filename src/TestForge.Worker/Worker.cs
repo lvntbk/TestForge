@@ -224,16 +224,11 @@ public sealed class Worker : BackgroundService
             workspacePath,
             cancellationToken);
 
-        var webProjectPath = analysis.WebProjectPaths.First();
+        var selectedTestProjects =
+            TestProjectSelector.Select(
+                analysis.TestProjectPaths);
 
-        var relevantTestProjects =
-            await FindRelevantTestProjectsAsync(
-                workspacePath,
-                webProjectPath,
-                analysis.TestProjectPaths,
-                cancellationToken);
-
-        if (relevantTestProjects.Count == 0)
+        if (selectedTestProjects.Count == 0)
         {
             _logger.LogWarning(
                 "No relevant test projects found for {TestRunId}.",
@@ -244,7 +239,7 @@ public sealed class Worker : BackgroundService
             return;
         }
 
-        foreach (var testProjectPath in relevantTestProjects)
+        foreach (var testProjectPath in selectedTestProjects)
         {
             _logger.LogInformation(
                 "Running {TestProjectPath} in Docker.",
@@ -295,29 +290,6 @@ public sealed class Worker : BackgroundService
             testRun.Id);
     }
 
-    private static Task<List<string>>
-        FindRelevantTestProjectsAsync(
-            string workspacePath,
-            string webProjectPath,
-            IReadOnlyList<string> testProjectPaths,
-            CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var webProjectName =
-            Path.GetFileNameWithoutExtension(webProjectPath);
-
-        var relevantProjects = testProjectPaths
-            .Where(testProjectPath =>
-                Path.GetFileNameWithoutExtension(testProjectPath)
-                    .Contains(
-                        webProjectName,
-                        StringComparison.OrdinalIgnoreCase))
-            .OrderBy(testProjectPath => testProjectPath)
-            .ToList();
-
-        return Task.FromResult(relevantProjects);
-    }
 
     private static async Task FailAsync(
         TestRunEntity testRun,
