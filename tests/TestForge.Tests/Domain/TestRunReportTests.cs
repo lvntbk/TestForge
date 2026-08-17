@@ -9,7 +9,12 @@ public sealed class TestRunReportTests
     {
         var report = TestRunReport.Create(Guid.NewGuid());
 
-        report.RecordBuild("src/Api.csproj", 1, 1500, "output", "error");
+        report.RecordBuild(
+            "src/Api.csproj",
+            1,
+            1500,
+            "output",
+            "error");
 
         Assert.Equal("src/Api.csproj", report.BuildProjectPath);
         Assert.Equal(1, report.BuildExitCode);
@@ -19,15 +24,40 @@ public sealed class TestRunReportTests
     }
 
     [Fact]
-    public void RecordTest_MultipleResults_AccumulatesDurationAndLogs()
+    public void RecordTest_MultipleResults_AccumulatesCountsDurationAndLogs()
     {
+        // Arrange
         var report = TestRunReport.Create(Guid.NewGuid());
 
-        report.RecordTest("tests/A.csproj", 0, 500, "A output", "");
-        report.RecordTest("tests/B.csproj", 1, 750, "B output", "B error");
+        // Act
+        report.RecordTest(
+            "tests/A.csproj",
+            0,
+            500,
+            "A output",
+            "",
+            passedCount: 3,
+            failedCount: 1,
+            skippedCount: 0);
 
+        report.RecordTest(
+            "tests/B.csproj",
+            1,
+            750,
+            "B output",
+            "B error",
+            passedCount: 5,
+            failedCount: 2,
+            skippedCount: 4);
+
+        // Assert
         Assert.Equal(1250, report.TestDurationMilliseconds);
         Assert.Equal(1, report.TestExitCode);
+
+        Assert.Equal(8, report.PassedCount);
+        Assert.Equal(3, report.FailedCount);
+        Assert.Equal(4, report.SkippedCount);
+
         Assert.Contains("tests/A.csproj", report.TestProjectPaths);
         Assert.Contains("tests/B.csproj", report.TestProjectPaths);
         Assert.Contains("A output", report.TestStandardOutput);

@@ -6,4 +6,7 @@ public sealed record TestExecutionResult(
     string TestProjectPath,
     long DurationMilliseconds,
     string StandardOutput,
-    string StandardError);
+    string StandardError,
+    int PassedCount,
+    int FailedCount,
+    int SkippedCount);

@@ -260,7 +260,10 @@ public sealed class Worker : BackgroundService
                 result.ExitCode,
                 result.DurationMilliseconds,
                 result.StandardOutput,
-                result.StandardError);
+                result.StandardError,
+                result.PassedCount,
+                result.FailedCount,
+                result.SkippedCount);
 
             await reportRepository.SaveChangesAsync(cancellationToken);
 

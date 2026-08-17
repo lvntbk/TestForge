@@ -42,6 +42,10 @@ builder.Services.AddSingleton<
     DockerDotNetBuildRunner>();
 
 builder.Services.AddSingleton<
+    ITestResultParser,
+    TrxTestResultParser>();
+
+builder.Services.AddSingleton<
     IDotNetTestRunner,
     DockerDotNetTestRunner>();
 

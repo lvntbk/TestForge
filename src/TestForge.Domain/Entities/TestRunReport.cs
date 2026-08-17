@@ -57,17 +57,42 @@ public sealed class TestRunReport
         int exitCode,
         long durationMilliseconds,
         string standardOutput,
-        string standardError)
+        string standardError,
+        int passedCount,
+        int failedCount,
+        int skippedCount)
     {
-        TestProjectPaths = AppendLine(TestProjectPaths, projectPath);
+        TestProjectPaths = AppendLine(
+            TestProjectPaths,
+            projectPath);
+
         TestExitCode = exitCode;
+
         TestDurationMilliseconds =
-            (TestDurationMilliseconds ?? 0) + durationMilliseconds;
-        TestStandardOutput = AppendLine(TestStandardOutput, standardOutput);
-        TestStandardError = AppendLine(TestStandardError, standardError);
+            (TestDurationMilliseconds ?? 0) +
+            durationMilliseconds;
+
+        TestStandardOutput = AppendLine(
+            TestStandardOutput,
+            standardOutput);
+
+        TestStandardError = AppendLine(
+            TestStandardError,
+            standardError);
+
+        PassedCount =
+            (PassedCount ?? 0) + passedCount;
+
+        FailedCount =
+            (FailedCount ?? 0) + failedCount;
+
+        SkippedCount =
+            (SkippedCount ?? 0) + skippedCount;
     }
 
-    private static string AppendLine(string? current, string value)
+    private static string AppendLine(
+        string? current,
+        string value)
     {
         if (string.IsNullOrEmpty(value))
         {
@@ -76,6 +101,9 @@ public sealed class TestRunReport
 
         return string.IsNullOrEmpty(current)
             ? value
-            : string.Join(Environment.NewLine, current, value);
+            : string.Join(
+                Environment.NewLine,
+                current,
+                value);
     }
 }

@@ -21,6 +21,8 @@ The first end-to-end MVP pipeline is operational.
 - Persistent state transitions
 - Persistent build and test reports
 - Build and test exit codes, durations, project paths and logs
+- TRX test result generation and secure XML parsing
+- Passed, failed and skipped test count aggregation
 - JSON report endpoint (`GET /api/test-runs/{id}/report`)
 - Unit and integration tests
 
@@ -40,12 +42,12 @@ TestForge.Tests: 11 passed, 0 failed
 
 ## Next milestone
 
-Complete structured test result reporting:
+Harden the execution lifecycle:
 
-- Generate TRX files during test execution
-- Parse passed, failed and skipped counts
+- Fail explicitly when no test projects are detected
 - Store individual test project results
 - Add report retention and log size policies
+- Clean up expired workspaces and TRX files
 
 ## Later roadmap
 

@@ -8,6 +8,14 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
     private static readonly TimeSpan TestTimeout =
         TimeSpan.FromMinutes(5);
 
+    private readonly ITestResultParser _resultParser;
+
+    public DockerDotNetTestRunner(
+        ITestResultParser resultParser)
+    {
+        _resultParser = resultParser;
+    }
+
     public async Task<TestExecutionResult> RunAsync(
         Guid testRunId,
         string workspacePath,
@@ -31,6 +39,20 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
             fullWorkspacePath,
             fullTestProjectPath);
 
+        var resultDirectoryPath = Path.Combine(
+            fullWorkspacePath,
+            ".testforge",
+            "results",
+            testRunId.ToString("N"));
+
+        Directory.CreateDirectory(resultDirectoryPath);
+
+        var trxFileName = $"{Guid.NewGuid():N}.trx";
+
+        var trxFilePath = Path.Combine(
+            resultDirectoryPath,
+            trxFileName);
+
         using var timeoutSource =
             CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
@@ -42,7 +64,8 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
             StartInfo = CreateStartInfo(
                 testRunId,
                 fullWorkspacePath,
-                relativeTestProjectPath)
+                relativeTestProjectPath,
+                trxFileName)
         };
 
         var stopwatch = Stopwatch.StartNew();
@@ -59,13 +82,20 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
             var output = await outputTask;
             var error = await errorTask;
 
+            var counts = File.Exists(trxFilePath)
+                ? _resultParser.Parse(trxFilePath)
+                : new TestResultCounts(0, 0, 0);
+
             return new TestExecutionResult(
                 process.ExitCode == 0,
                 process.ExitCode,
                 relativeTestProjectPath,
                 stopwatch.ElapsedMilliseconds,
                 output,
-                error);
+                error,
+                counts.PassedCount,
+                counts.FailedCount,
+                counts.SkippedCount);
         }
         catch (OperationCanceledException)
             when (!cancellationToken.IsCancellationRequested)
@@ -78,7 +108,10 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
                 relativeTestProjectPath,
                 stopwatch.ElapsedMilliseconds,
                 string.Empty,
-                "Docker test operation timed out.");
+                "Docker test operation timed out.",
+                0,
+                0,
+                0);
         }
         catch (Exception exception)
         {
@@ -90,14 +123,18 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
                 relativeTestProjectPath,
                 stopwatch.ElapsedMilliseconds,
                 string.Empty,
-                exception.Message);
+                exception.Message,
+                0,
+                0,
+                0);
         }
     }
 
     private static ProcessStartInfo CreateStartInfo(
         Guid testRunId,
         string workspacePath,
-        string testProjectPath)
+        string testProjectPath,
+        string trxFileName)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -145,7 +182,9 @@ public sealed class DockerDotNetTestRunner : IDotNetTestRunner
             testProjectPath,
             "--nologo",
             "--logger",
-            "console;verbosity=normal"
+            $"trx;LogFileName={trxFileName}",
+            "--results-directory",
+            $"/workspace/.testforge/results/{testRunId:N}"
         ];
 
         foreach (var argument in arguments)

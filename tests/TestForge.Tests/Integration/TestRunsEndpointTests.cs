@@ -128,7 +128,15 @@ public sealed class TestRunsEndpointTests :
             .GetRequiredService<ITestRunReportRepository>();
         var report = await reports.GetOrCreateAsync(testRun.Id);
         report.RecordBuild("src/Sample.Api.csproj", 0, 1250, "ok", "");
-        report.RecordTest("tests/Sample.Tests.csproj", 0, 800, "passed", "");
+        report.RecordTest(
+            "tests/Sample.Tests.csproj",
+            0,
+            800,
+            "passed",
+            "",
+            passedCount: 4,
+            failedCount: 1,
+            skippedCount: 2);
         await reports.SaveChangesAsync();
 
         var response = await _client.GetAsync(
@@ -145,6 +153,9 @@ public sealed class TestRunsEndpointTests :
         Assert.Equal(1250, result.BuildDurationMilliseconds);
         Assert.Single(result.TestProjectPaths);
         Assert.Equal("tests/Sample.Tests.csproj", result.TestProjectPaths[0]);
+        Assert.Equal(4, result.PassedCount);
+        Assert.Equal(1, result.FailedCount);
+        Assert.Equal(2, result.SkippedCount);
     }
 
     [Fact]
