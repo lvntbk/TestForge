@@ -27,9 +27,9 @@ TestForge is an automated testing platform for public .NET GitHub repositories. 
 
 ## Demo
 
-[![TestForge pipeline demo](docs/images/testforge-demo.gif)](docs/testforge-demo.mp4)
+[![TestForge pipeline demo](docs/images/testforge-demo.gif)](https://raw.githubusercontent.com/lvntbk/TestForge/main/docs/testforge-demo.mp4)
 
-_Click the demo to open the full-quality MP4 recording._
+[Open the full-quality MP4 demo](https://raw.githubusercontent.com/lvntbk/TestForge/main/docs/testforge-demo.mp4)
 
 ## Architecture
 
